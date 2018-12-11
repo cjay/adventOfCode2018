@@ -48,8 +48,8 @@ rotate n s = if n > 0
 initialState :: Int -> State
 initialState players = State { circle = Seq.singleton 0
                              , scores = listArray (1, players) (repeat 0)
-                             , player = 1
-                             , marble = 1
+                             , player = 1 -- next player
+                             , marble = 1 -- next marble
                              }
 
 tick :: State -> State
@@ -64,7 +64,7 @@ tick st = st' { player = player st `mod` length (scores st) + 1 -- players start
             scores' = scores st // [(player st, scores st ! (player st) + marble st + taken)]
 
 runUntilMarble :: State -> Marble -> State
-runUntilMarble st mrb = head $ dropWhile (\s -> marble s <= mrb) $ iterate' tick st
+runUntilMarble st mrb = until (\s -> marble s > mrb) tick st
 
 winner :: Array Player Score -> (Player, Score)
 winner scs = maximumBy (compare `on` snd) (assocs scs)
