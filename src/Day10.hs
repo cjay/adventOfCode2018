@@ -50,14 +50,10 @@ convert (topLeft, bottomRight) p = rowLen * y + x where
     V2 x y = p - topLeft
     rowLen = bottomRight^._x - topLeft^._x + 1
 
--- | convert Int back to Point, but with top left being (0, 0).
-toRenderSpace :: (Point, Point) -> Int -> Point
-toRenderSpace (topLeft, bottomRight) i = uncurry V2 $ i `divMod` rowLen where
-    rowLen = bottomRight^._x - topLeft^._x + 1
-
 buildSet :: (Point -> Int) -> [Point] -> IntSet
 buildSet conv ps = IntSet.fromList $ map conv ps
 
+-- | counts vert and horiz neighbors for each pixel
 score :: [Point] -> Int
 score ps = let box = boundingBox ps
                conv = convert box
