@@ -70,20 +70,22 @@ closestTime pi@(PointInfo p0 _) pi'@(PointInfo p0' _) = go 0 where
     go t = if t == t' then t else go t' where
         p1 = atTime (t+1) pi
         p1' = atTime (t+1) pi'
-        dist a b = distance (fmap fromIntegral a) (fmap fromIntegral b)
+        dist a b = distance (fromIntegral <$> a) (fromIntegral <$> b)
         d0 = dist p0 p0'
         d1 = dist p1 p1'
         t' = t + round (d1 / (d0 - d1))
 
 render :: [Point] -> String
-render ps = unlines $ map line [0 .. yMax] where
-    (topLeft, bottomRight) = boundingBox ps
-    ps' = map (\p -> p - topLeft) ps
-    xMax = bottomRight^._x - topLeft^._x
-    yMax = bottomRight^._y - topLeft^._y
-    conv = convert (V2 0 0, V2 xMax yMax)
-    set = buildSet conv ps'
-    line y = flip map [0 .. xMax] $ \x -> if IntSet.member (conv $ V2 x y) set then '#' else ' '
+render ps =
+  let (topLeft, bottomRight) = boundingBox ps
+      ps' = map (subtract topLeft) ps
+      xMax = bottomRight^._x - topLeft^._x
+      yMax = bottomRight^._y - topLeft^._y
+      conv = convert (V2 0 0, V2 xMax yMax)
+      set = buildSet conv ps'
+      line y = flip map [0 .. xMax] $ \x ->
+              if (conv $ V2 x y) `IntSet.member` set then '#' else ' '
+  in unlines $ map line [0 .. yMax]
 
 main :: IO ()
 main = do
@@ -92,7 +94,7 @@ main = do
       estimatedTime = closestTime (pointInfos!!0) (pointInfos!!1)
       candidateTimes = [(estimatedTime - 100) .. (estimatedTime + 100)]
       timeScore t = score . map (atTime t) $ pointInfos
-      (tWin, _) = maximumBy (compare `on` snd) $ map (\t -> (t, timeScore t)) candidateTimes
-      ps = map (atTime tWin) $ pointInfos
+      tWin = maximumBy (compare `on` timeScore) candidateTimes
+      points = map (atTime tWin) $ pointInfos
   print tWin
-  putStrLn $ render ps
+  putStrLn $ render points
