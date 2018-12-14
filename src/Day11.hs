@@ -21,16 +21,21 @@ makeGrid :: Int -> Array Point Int
 makeGrid gridSerial = listArray bounds_ (map (pwrLvl gridSerial) (range bounds_)) where
     bounds_ = (V2 1 1, V2 gridWidth gridHeight)
 
-sumBlock :: Array Point Int -> Point -> Int
-sumBlock arr p = sum $ map (arr!) $ range (p, p + pure 2)
+sumBlock :: Array Point Int -> Int -> Point -> Int
+sumBlock arr size p = sum $ map (arr!) $ range (p, p + pure (size - 1))
 
-findMaxBlock :: Array Point Int -> Point
-findMaxBlock arr = maximumBy (compare `on` sumBlock arr) (range bounds_) where
-    bounds_ = (V2 1 1, V2 (gridWidth-2) (gridHeight-2))
+boundsBySize :: Int -> (Point, Point)
+boundsBySize size = (V2 1 1, V2 (gridWidth - size + 1) (gridHeight - size + 1))
+
+maxBlockForSize :: Array Point Int -> Int -> Point
+maxBlockForSize arr size = maximumBy (compare `on` sumBlock arr size) (range $ boundsBySize size)
+
+maxBlock :: Array Point Int -> (Point, Int)
+maxBlock arr = maximumBy (compare `on` fst) $ map (\s -> (maxBlockForSize arr s, s)) [1..300]
 
 main :: IO ()
 main = do
   let gridSerial = 5235 -- input
       grid = makeGrid gridSerial
-      result = findMaxBlock grid
-  print result
+  print $ maxBlockForSize grid 3
+  print $ maxBlock grid
