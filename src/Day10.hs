@@ -66,13 +66,13 @@ score ps = let box = boundingBox ps
 -- could also use derivative and do gradient descent properly
 -- I'm not quite sure this terminates for every two points
 closestTime :: PointInfo -> PointInfo -> Int
-closestTime pi@(PointInfo p0 _) pi'@(PointInfo p0' _) = go 0 where
+closestTime pi0@(PointInfo p0 _) pi1@(PointInfo p1 _) = go 0 where
     go t = if t == t' then t else go t' where
-        p1 = atTime (t+1) pi
-        p1' = atTime (t+1) pi'
-        dist a b = distance (fromIntegral <$> a) (fromIntegral <$> b)
-        d0 = dist p0 p0'
-        d1 = dist p1 p1'
+        p0' = atTime (t+1) pi0
+        p1' = atTime (t+1) pi1
+        dist = distance `on` fmap fromIntegral
+        d0 = dist p0 p1
+        d1 = dist p0' p1'
         t' = t + round (d1 / (d0 - d1))
 
 render :: [Point] -> String
@@ -84,7 +84,7 @@ render ps =
       conv = convert (V2 0 0, V2 xMax yMax)
       set = buildSet conv ps'
       line y = flip map [0 .. xMax] $ \x ->
-              if (conv $ V2 x y) `IntSet.member` set then '#' else ' '
+               if (conv $ V2 x y) `IntSet.member` set then '#' else ' '
   in unlines $ map line [0 .. yMax]
 
 main :: IO ()
