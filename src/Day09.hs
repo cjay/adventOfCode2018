@@ -33,11 +33,13 @@ data State = State { circle :: Seq Marble
 
 -- current cursor one to the right
 rotRight :: Seq a -> Seq a
-rotRight s = xs |> x where x :< xs = viewl s
+rotRight Seq.Empty = Seq.Empty
+rotRight (x :<| xs) = xs |> x
 
 -- current cursor one to the left
 rotLeft :: Seq a -> Seq a
-rotLeft s = x <| xs where xs :> x = viewr s
+rotLeft Seq.Empty = Seq.Empty
+rotLeft (xs :|> x) = x <| xs
 
 rotate :: Int -> Seq a -> Seq a
 rotate 0 s = s
