@@ -70,9 +70,11 @@ main = do
   let (initialPots, rules) = either (\e -> error $ show e) id $ parse inputParser "" input
       alivePats = Set.fromList $ map pat $ filter (\Rule { next } -> next == Plant) rules
       generations = iterate (tick alivePats) (0, initialPots)
-      endGen = head $ drop 20 generations
+      endGen = head $ drop 1000 generations
       (startIndex, pots) = endGen
       potsWithPlants =
           catMaybes $ zipWith (\ix pot -> if pot == Plant then Just ix else Nothing)
                         [startIndex..] pots
   print $ sum potsWithPlants
+  -- looking at 1000 and 2000 leads to...
+  -- part 2: 50000000*65000 + 956 = 3250000000956
