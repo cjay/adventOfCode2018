@@ -16,8 +16,8 @@ import Data.Ord
 import Linear.V2
 import Control.Lens
 
-newtype Pos = Pos { getPos :: V2 Int } deriving (Eq, Show, Ix)
-type Vec = V2 Int
+newtype Pos = PosV { getPos :: V2 Int } deriving (Eq, Show, Ix)
+pattern Pos x y = PosV (V2 x y)
 
 data Tile = Horiz | Vert | Slash | Backslash | Cross | Space deriving (Eq, Show)
 data Dir = North | South | East | West deriving (Eq, Ord, Show)
@@ -29,11 +29,14 @@ data Collision = Collision { collNum :: !Int } deriving (Eq, Ord, Show)
 instance Ord Pos where
     compare = comparing ((^._yx) . getPos)
 
+(+:) :: Pos -> V2 Int -> Pos
+(PosV pv) +: delta = PosV $ pv + delta
+
 nextPos :: Pos -> Dir -> Pos
-nextPos (Pos (V2 x y)) North = Pos $ V2 x (y-1)
-nextPos (Pos (V2 x y)) South = Pos $ V2 x (y+1)
-nextPos (Pos (V2 x y)) East = Pos $ V2 (x+1) y
-nextPos (Pos (V2 x y)) West = Pos $ V2 (x-1) y
+nextPos pos dir = pos +: case dir of North -> V2   0  (-1)
+                                     South -> V2   0    1
+                                     East  -> V2   1    0
+                                     West  -> V2 (-1)   0
 
 nextTurn :: Turn -> Turn
 nextTurn TurnLeft = Straight
@@ -106,14 +109,14 @@ lineParser row = do
                                    'v' -> Vert
                                    ' ' -> Space
                                    _ -> error $ "unexpected char " ++ show c ++ " at " ++ show (col, row)
-              in (Pos (V2 col row), tile)
+              in (Pos col row, tile)
       carts = flip mapMaybe numberedChars $ \(col, c) ->
               let dir = case c of '>' -> Just East
                                   '<' -> Just West
                                   'v' -> Just South
                                   '^' -> Just North
                                   _ -> Nothing
-              in dir >>= \dir' -> return (Pos (V2 col row), Cart dir' TurnLeft)
+              in dir >>= \dir' -> return (Pos col row, Cart dir' TurnLeft)
   return (tiles, carts)
 
 sequenceTill :: Alternative m => m end -> [m a] -> m [a]
@@ -131,7 +134,7 @@ inputParser = do
       cols = maximum $ map length posWithTilesPerLine
       posWithTiles = concat posWithTilesPerLine
       posWithCarts = zipWith (\(pos, cart) cartId -> (pos, cart cartId)) (concat posWithCartsPerLine) [0..]
-  return (array (Pos (V2 0 0), Pos (V2 (cols-1) (rows-1))) posWithTiles, posWithCarts)
+  return (array (Pos 0 0, Pos (cols-1) (rows-1)) posWithTiles, posWithCarts)
 
 type Object = Either Collision Cart
 
