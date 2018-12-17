@@ -1,9 +1,7 @@
-{-# LANGUAGE ScopedTypeVariables, BangPatterns, OverloadedStrings, NamedFieldPuns, ApplicativeDo #-}
+{-# LANGUAGE ScopedTypeVariables, BangPatterns, OverloadedStrings, NamedFieldPuns, ApplicativeDo, PatternSynonyms #-}
 module Main where
 
-import qualified Data.Text as T
 import Data.Text (Text)
-import Data.String
 import qualified Data.Text.IO as TIO
 import Text.Megaparsec hiding (Pos)
 import Text.Megaparsec.Char
@@ -11,16 +9,12 @@ import Data.Void
 import Data.Maybe
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Function (on)
-import Control.Arrow
 import Control.Applicative
 import Data.List
-import Data.Either
 import Data.Array
 import Data.Ord
 import Linear.V2
 import Control.Lens
-import Debug.Trace
 
 newtype Pos = Pos { getPos :: V2 Int } deriving (Eq, Show, Ix)
 type Vec = V2 Int
@@ -131,7 +125,7 @@ sequenceTill end (a:as) = end *> pure [] <|> do
 
 inputParser :: Parser (Array Pos Tile, [(Pos, Cart)])
 inputParser = do
-  lineResults <- sequenceTill eof $ zipWith ($) (repeat lineParser) [0..]
+  lineResults <- sequenceTill eof $ map lineParser [0..]
   let (posWithTilesPerLine, posWithCartsPerLine) = unzip lineResults
       rows = length posWithTilesPerLine
       cols = maximum $ map length posWithTilesPerLine
@@ -141,11 +135,17 @@ inputParser = do
 
 type Object = Either Collision Cart
 
+posObjsToCollisions :: [(Pos, Object)] -> [(Pos, Collision)]
+posObjsToCollisions = mapMaybe $ \(pos, obj) ->
+                      either (\coll -> Just (pos, coll)) (const Nothing) obj
+
+posObjsToCarts :: [(Pos, Object)] -> [(Pos, Cart)]
+posObjsToCarts = mapMaybe $ \(pos, obj) ->
+                 either (const Nothing) (\cart -> Just (pos, cart)) obj
+
 tick :: Array Pos Tile -> Map Pos Object -> Map Pos Object
 tick tileArr !posObjs = foldl' move posObjs cartsInOrder where
-    cartsInOrder = catMaybes
-                 . map (\(pos, obj) -> either (const Nothing) (\cart -> Just (pos, cart)) obj)
-                 . sortOn fst $ Map.assocs posObjs
+    cartsInOrder = posObjsToCarts . sortOn fst $ Map.assocs posObjs
     move :: Map Pos Object -> (Pos, Cart) -> Map Pos Object
     move objMap (pos, cart) = if inCurrentPos /= Just (Right cart)
                               then objMap -- another cart ran into this cart already in the same tick
@@ -158,7 +158,7 @@ tick tileArr !posObjs = foldl' move posObjs cartsInOrder where
         putCart Nothing = Just $ Right cart'
         putCart (Just (Right _)) = Just $ Left (Collision 2)
         ----- without cleanup of collisions:
-        -- putCart (Just (Left (Collision n))) = Left (Collision (n+1))
+        -- putCart (Just (Left (Collision n))) = Just $ Left (Collision (n+1))
         ----- a collision disappears as soon as a cart drives over it:
         putCart (Just (Left (Collision _))) = Just $ Right cart'
 
@@ -167,10 +167,8 @@ main = do
   input <- TIO.readFile "inputs/day13.txt"
   let (!tileArr, !carts) = either (\e -> error $ show e) id $ parse inputParser "" input
       objMapStates = iterate (tick tileArr) (Map.fromList . map (fmap Right) $ carts)
-      posCollisions = concatMap (mapMaybe getPosColl . Map.assocs) objMapStates
-      getPosColl (pos, obj) = either (\coll -> Just (pos, coll)) (const Nothing) obj
-      getPosCart (pos, obj) = either (const Nothing) (\cart -> Just (pos, cart)) obj
-      posCartStates = map (mapMaybe getPosCart . Map.assocs) objMapStates
-      survivor = head $ fromJust $ find (\posCarts -> length posCarts == 1) posCartStates
+      posCollisions = concatMap (posObjsToCollisions  . Map.assocs) objMapStates
+      posCartStates = map (posObjsToCarts . Map.assocs) objMapStates
+      survivor = head $ fromJust $ find ((== 1) . length) posCartStates
   print $ head posCollisions -- 118,66
   print survivor -- 70,129
