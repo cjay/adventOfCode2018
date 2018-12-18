@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, BangPatterns, OverloadedStrings, NamedFieldPuns, ApplicativeDo, PatternSynonyms #-}
+{-# LANGUAGE ScopedTypeVariables, BangPatterns, OverloadedStrings, NamedFieldPuns, ApplicativeDo, PatternSynonyms, GADTs #-}
 module Main where
 
 import Data.Text (Text)
@@ -93,31 +93,32 @@ nextDir (West, t) Cross = (nextDir, nextTurn t) where
 
 type Parser = Parsec Void Text
 
+tileParser :: Parser (Tile, Maybe Dir)
+tileParser = choice . map (\(c, t) -> char c *> pure (t, Nothing)) $
+             [ ('|', Vert)
+             , ('-', Horiz)
+             , ('/', Slash)
+             , ('\\', Backslash)
+             , ('+', Cross)
+             , (' ', Space)
+             ]
+
+dirParser :: Parser (Tile, Maybe Dir)
+dirParser = choice . map (\(c, t, d) -> char c *> pure (t, Just d)) $
+            [ ('>', Horiz, East)
+            , ('<', Horiz, West)
+            , ('^', Vert, North)
+            , ('v', Vert, South)
+            ]
+
 lineParser :: Int -> Parser ([(Pos, Tile)], [(Pos, Int -> Cart)])
 lineParser row = do
-  raw <- manyTill anySingle eol
-  let numberedChars = zip [0..] raw
-      tiles = flip map numberedChars $ \(col, c) ->
-             let !tile = case c of '|' -> Vert
-                                   '-' -> Horiz
-                                   '/' -> Slash
-                                   '\\' -> Backslash
-                                   '+' -> Cross
-                                   '>' -> Horiz
-                                   '<' -> Horiz
-                                   '^' -> Vert
-                                   'v' -> Vert
-                                   ' ' -> Space
-                                   _ -> error $ "unexpected char " ++ show c ++ " at " ++ show (col, row)
-              in (Pos col row, tile)
-      carts = flip mapMaybe numberedChars $ \(col, c) ->
-              let dir = case c of '>' -> Just East
-                                  '<' -> Just West
-                                  'v' -> Just South
-                                  '^' -> Just North
-                                  _ -> Nothing
-              in dir >>= \dir' -> return (Pos col row, Cart dir' TurnLeft)
-  return (tiles, carts)
+  (tiles, maybeDirs) <- unzip <$> manyTill (tileParser <|> dirParser) eol
+  let posTiles = zipWith (\col tile -> (Pos col row, tile)) [0..] tiles
+      colWithDirs = catMaybes $
+                    zipWith (\col -> (>>= \dir -> Just (col, dir))) [0..] maybeDirs
+      posCarts = map (\(col, dir) -> (Pos col row, Cart dir TurnLeft)) colWithDirs
+  return (posTiles, posCarts)
 
 sequenceTill :: Alternative m => m end -> [m a] -> m [a]
 sequenceTill _ [] = pure []
@@ -168,7 +169,7 @@ tick tileArr !posObjs = foldl' move posObjs cartsInOrder where
 main :: IO ()
 main = do
   input <- TIO.readFile "inputs/day13.txt"
-  let (!tileArr, !carts) = either (\e -> error $ show e) id $ parse inputParser "" input
+  let (!tileArr, !carts) = either (\e -> error $ errorBundlePretty e) id $ parse inputParser "" input
       objMapStates = iterate (tick tileArr) (Map.fromList . map (fmap Right) $ carts)
       posCollisions = concatMap (posObjsToCollisions  . Map.assocs) objMapStates
       posCartStates = map (posObjsToCarts . Map.assocs) objMapStates
