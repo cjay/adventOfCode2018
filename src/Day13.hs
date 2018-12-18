@@ -7,6 +7,8 @@ import Text.Megaparsec hiding (Pos)
 import Text.Megaparsec.Char
 import Data.Void
 import Data.Maybe
+import Data.Either
+import Data.Either.Combinators
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Control.Applicative
@@ -116,16 +118,15 @@ lineParser row = do
   (tiles, maybeDirs) <- unzip <$> manyTill (tileParser <|> dirParser) eol
   let posTiles = zipWith (\col tile -> (Pos col row, tile)) [0..] tiles
       colWithDirs = catMaybes $
-                    zipWith (\col -> (>>= \dir -> Just (col, dir))) [0..] maybeDirs
+                    zipWith (\col -> fmap (\dir -> (col, dir))) [0..] maybeDirs
       posCarts = map (\(col, dir) -> (Pos col row, Cart dir TurnLeft)) colWithDirs
   return (posTiles, posCarts)
 
 sequenceTill :: Alternative m => m end -> [m a] -> m [a]
-sequenceTill _ [] = pure []
-sequenceTill end (a:as) = end *> pure [] <|> do
-                            a' <- a
-                            as' <- sequenceTill end as
-                            return (a':as')
+sequenceTill end [] = [] <$ end
+sequenceTill end (a:as) = [] <$ end <|> do a' <- a
+                                           as' <- sequenceTill end as
+                                           return (a':as')
 
 inputParser :: Parser (Array Pos Tile, [(Pos, Cart)])
 inputParser = do
@@ -139,13 +140,11 @@ inputParser = do
 
 type Object = Either Collision Cart
 
-posObjsToCollisions :: [(Pos, Object)] -> [(Pos, Collision)]
-posObjsToCollisions = mapMaybe $ \(pos, obj) ->
-                      either (\coll -> Just (pos, coll)) (const Nothing) obj
-
 posObjsToCarts :: [(Pos, Object)] -> [(Pos, Cart)]
-posObjsToCarts = mapMaybe $ \(pos, obj) ->
-                 either (const Nothing) (\cart -> Just (pos, cart)) obj
+posObjsToCarts = rights . map sequence -- sequence turns the Either in the tuple inside out
+
+posObjsToCollisions :: [(Pos, Object)] -> [(Pos, Collision)]
+posObjsToCollisions = rights . map (sequence . fmap swapEither)
 
 tick :: Array Pos Tile -> Map Pos Object -> Map Pos Object
 tick tileArr !posObjs = foldl' move posObjs cartsInOrder where
