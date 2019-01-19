@@ -14,8 +14,10 @@ type VM = VM.IOVector Word8
 step :: VM -> ([Int], Int) -> IO ([Int], Int)
 step v (cur, n) = do
   curVals <- mapM (VM.read v) cur
-  let sum_ :: Int = sum $ map fromIntegral curVals
-      digits :: [Word8] = map (read . (:"")) $ show sum_
+  let sum_ :: Word8 = sum $ map fromIntegral curVals
+      -- only works for sum_ up to 99
+      digits :: [Word8] = if a == 0 then [b] else [a,b] where
+        (a, b) = sum_ `divMod` 10
   sequence_ $ zipWith (VM.write v) [n..] digits
   let n' = n + length digits
       cur' = map (`mod` n') $ zipWith (+) (map (fromIntegral . (+1)) curVals) cur

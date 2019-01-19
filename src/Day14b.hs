@@ -33,13 +33,29 @@ traceStr s x = unsafePerformIO (putStr s >> hFlush stdout) `seq` x
 stream :: [Word8]
 stream = oneShot (concatMap VL.toList) chunks
 
--- tried replacing by fastIndex, but no speedup
-getIndex :: Int -> Word8
-getIndex ix = let
+naiveIndex :: Int -> Word8
+naiveIndex ix = let
   (n, i) = ix `divMod` chunkSize
   chunk = chunks !! n
   in chunk VL.! i
 
+-- fastIndex without the unboxed chunks. same speed as naiveIndex, couldn't find out why
+fastIndexBoxed :: Int -> State ([VL.Vector Word8], VL.Vector (VL.Vector Word8)) Word8
+fastIndexBoxed ix = do
+  (chunks, chunkVec) <- get
+  let (n, i) = ix `divMod` chunkSize
+  if n < VL.length chunkVec then do
+    return $ chunkVec VL.! n VL.! i
+  else if n == VL.length chunkVec then do
+    return $ (head chunks) VL.! i
+  else do
+    let (c:chunks') = chunks
+        chunkVec' = VL.snoc chunkVec c
+    put (chunks', chunkVec')
+    fastIndexBoxed ix
+
+-- compared to naiveIndex and fastIndexBoxed. speedup only comes from the
+-- unboxed chunk contents, not the indexing. something is wrong.
 fastIndex :: Int -> State ([VL.Vector Word8], VL.Vector (VU.Vector Word8)) Word8
 fastIndex ix = do
   (chunks, chunkVec) <- get
@@ -55,8 +71,8 @@ fastIndex ix = do
     fastIndex ix
 
 chunks :: [VL.Vector Word8]
--- chunks = consume $ evalState (generate fastIndex) (chunks, VL.empty) where
-chunks = consume $ runIdentity (generate (pure . getIndex)) where
+chunks = consume $ evalState (generate fastIndex) (chunks, VL.empty) where
+-- chunks = consume $ runIdentity (generate (pure . naiveIndex)) where
   consume xs = let (chunkContent, rest) = explicitSplit chunkSize xs
                    chunk = VL.fromListN chunkSize chunkContent
                in traceStr "." $ chunk : consume rest
@@ -65,8 +81,10 @@ generate :: Monad m => (Int -> m Word8) -> m [Word8]
 generate getIndex = fmap ([3,7] ++) (gen [0, 1] 2) where
   gen cur n = do
     curVals <- mapM getIndex cur
-    let sum_ :: Int = sum $ map fromIntegral curVals
-        digits :: [Word8] = map (read . (:"")) $ show sum_
+    let sum_ :: Word8 = sum $ map fromIntegral curVals
+        -- only works for sum_ up to 99
+        digits :: [Word8] = if a == 0 then [b] else [a,b] where
+          (a, b) = sum_ `divMod` 10
         n' = n + length digits
         cur' = map (`mod` n') $ zipWith (+) (map (fromIntegral . (+1)) curVals) cur
     fmap (digits ++) (gen cur' n')
