@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, BangPatterns, OverloadedStrings, NamedFieldPuns, ApplicativeDo, PatternSynonyms, GADTs #-}
+{-# LANGUAGE ScopedTypeVariables, BangPatterns, OverloadedStrings, NamedFieldPuns, ApplicativeDo, PatternSynonyms #-}
 module Main where
 
 import Data.Text (Text)

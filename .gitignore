@@ -1,4 +1,5 @@
 dist/
+profiling/
 dist-*/
 .HTF/
 log/
